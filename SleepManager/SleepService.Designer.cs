@@ -28,10 +28,13 @@
 		/// </summary>
 		private void InitializeComponent()
 		{
-			components = new System.ComponentModel.Container();
-			this.CanStop = true;
-			this.CanShutdown = true;
-			this.ServiceName = "Service1";
+            // 
+            // SleepService
+            // 
+            this.CanShutdown = true;
+            this.CanStop = false;
+            this.ServiceName = "Service1";
+
 		}
 
 		#endregion
