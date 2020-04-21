@@ -81,73 +81,118 @@ namespace SleepManager
 			if (!IsAllowedTime(SpanKind.Shutdown))
 			{
 				Trace.TraceInformation("!IsAllowedTime");
-				if (UpTime.TotalMinutes < 10)
+				var now = DateTimeProvider.UtcNow;
+
+				var timeInFight = now - _shutdownAttempted;
+
+				if (UpTime.TotalMinutes <
+#if DEBUG
+					1
+#else
+					10
+#endif
+					) // top priority - if you are booting again (from zero) in restricted time - shutdown immediately
 				{
 					Trace.TraceInformation("UpTime.TotalMinutes < 10 - ForceShutdown");
 					ForceShutdown();
 				}
-				else
+				else if (timeInFight >= TimeSpan.FromMinutes(3))
 				{
-					var now = DateTimeProvider.UtcNow;
-					if (_shutdownAttempted.HasValue
-					    && (now - _shutdownAttempted) >= TimeSpan.FromMinutes(3))
+					Trace.TraceInformation(">= 3min - ForceShutdown");
+					ForceShutdown();
+				}
+				else if (timeInFight >= TimeSpan.FromMinutes(2))
+				{
+					Trace.TraceInformation(">= 2min - ForceHibernate");
+					ForceHibernate();
+				}
+				else if (timeInFight >= TimeSpan.FromSeconds(45))
+				{
+					if (HibernateFirst)
 					{
-						Trace.TraceInformation(">= 3min - ForceShutdown");
-						ForceShutdown();
-					}
-					else if (_shutdownAttempted.HasValue
-					         && (now - _shutdownAttempted) >= TimeSpan.FromMinutes(2))
-					{
-						Trace.TraceInformation(">= 2min - ForceHibernate");
-						ForceHibernate();
-					}
-					else if (_shutdownAttempted.HasValue
-					      && (now - _shutdownAttempted) >= TimeSpan.FromMinutes(35))
-					{
-						if (HibernateFirst)
-						{
-							Trace.TraceInformation(">= 35sec - Hibernate instead");
-							ShutdownAbort();
-							Hibernate();
-						}
-					}
-					else
-					{
-						Trace.TraceInformation("GracefulShutdown");
-						if (!_shutdownAttempted.HasValue)
-						{
-							_shutdownAttempted = now;
-						}
-						GracefulShutdown();
+						Trace.TraceInformation(">= 45sec - Hibernate instead");
+						ShutdownAbort();
+						Hibernate();
 					}
 				}
+				else
+				{
+					Trace.TraceInformation("GracefulShutdown");
+					if (!_shutdownAttempted.HasValue)
+					{
+						_shutdownAttempted = now;
+					}
+
+					GracefulShutdown(); // actually it will just show a warning for N minute. If hibernate enabled - it will abort, and hibernate instead
+				}
+
 			}
 			else
 			{
-				_shutdownAttempted = null; // process survives after hibernate
+				if (_shutdownAttempted.HasValue)
+				{
+					_shutdownAttempted = null; // process survives after hibernate and now in proper state
+					ShutdownAbort(); // just in case if been scheduled
+				}
 			}
 		}
 
 		private void GracefulShutdown()
 		{
+			var sgable = Environment.OSVersion.Version >= new Version("10.0.0.0");
+
+			var g = sgable ? "g" : "";
+			var graceful = Run("shutdown", $"/s{g} /t 59"); // at least Vista
+			if (graceful != 0) // denied by restart manager
+			{
+				Run("shutdown", "/s /t 59"); // without g
+			}
+			/*
 			try
 			{
-				Process.Start("shutdown", "/s /t 45"); // no force and 30 sec notification
+				Trace.TraceInformation("shutdown /sg /t 59");
+
+				var p = Process.Start("shutdown", "/sg /t 59");
+				p.WaitForExit();
+				Trace.TraceInformation("code: " + p.ExitCode);
+				if (p.ExitCode != 0)
+				{
+					throw new Exception();
+				}
 			}
 			catch
 			{
+				Trace.TraceInformation("Exception");
+				Trace.TraceInformation("shutdown /s /t 59");
+
+				try
+				{
+					var p = Process.Start("shutdown", "/s /t 59");
+					p.WaitForExit();
+					Trace.TraceInformation("code: " + p.ExitCode);
+				}
+				catch
+				{
+				}
 			}
+			*/
 		}
 
 		private void ShutdownAbort()
 		{
+			Run("shutdown", "/a");
+			/*
 			try
 			{
-				Process.Start("shutdown", "/a"); // no force and 30 sec notification
+				Trace.TraceInformation("shutdown /a");
+				var p = Process.Start("shutdown", "/a");
+				p.WaitForExit();
+				Trace.TraceInformation("code: " + p.ExitCode);
 			}
 			catch
 			{
 			}
+			*/
 		}
 
 		private readonly Lsa _lsa = new Lsa();
@@ -160,36 +205,84 @@ namespace SleepManager
 
 		private static void ForceHibernate()
 		{
+			Run("powercfg", "/h on");
+			Run("shutdown", "/h /f");
+			/*
 			try
 			{
-				Process.Start("shutdown", "/h /f");
+				Trace.TraceInformation("shutdown /h /f");
+
+				var p = Process.Start("shutdown", "/h /f");
+				p.WaitForExit();
+				Trace.TraceInformation("code: " + p.ExitCode);
+
 			}
 			catch
 			{
 			}
+			*/
 		}
 
 		private static void Hibernate()
 		{
+			Run("powercfg", "/h on");
+			Run("shutdown", "/h");
+			/*
 			try
 			{
-				Process.Start("shutdown", "/h");
+				Trace.TraceInformation("shutdown /h");
+
+				var p = Process.Start("shutdown", "/h");
+				p.WaitForExit();
+				Trace.TraceInformation("code: " + p.ExitCode);
 			}
 			catch
 			{
 			}
+			*/
 		}
 
 		private static void ForceShutdown()
 		{
+			Run("shutdown", "/s /f /t 0");
+			/*
 			try
 			{
-				Process.Start("shutdown", "/s /f /t 0");
+				Trace.TraceInformation("shutdown /s /f /t 0");
+
+				var p =Process.Start("shutdown", "/s /f /t 0");
+				p.WaitForExit();
+				Trace.TraceInformation("code: " + p.ExitCode);
 			}
 			catch
 			{
 			}
+			*/
 		}
+
+		static int Run(string cmd, string args)
+		{
+			try
+			{
+				Trace.TraceInformation($"{cmd} {args}");
+
+				var psi = new ProcessStartInfo(cmd, args)
+				{
+					// RedirectStandardOutput = true,
+					// RedirectStandardError = true,
+					UseShellExecute = false,
+				};
+				var p = Process.Start(psi);
+				p.WaitForExit();
+				Trace.TraceInformation("code: " + p.ExitCode);
+				return p.ExitCode;
+			}
+			catch
+			{
+				return -1;
+			}
+		}
+
 
 		private bool _tryAutoLodCtr;
 

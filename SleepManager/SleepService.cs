@@ -16,7 +16,7 @@ namespace SleepManager
 		private Timer _timer;
 		private Scheduler _scheduler;
 
-		protected override void OnStart(string[] args)
+		public void StartImpl()
 		{
 			Close();
 
@@ -32,6 +32,11 @@ namespace SleepManager
 #else
 			_timer.Change(0, 5000);
 #endif
+		}
+
+		protected override void OnStart(string[] args)
+		{
+			StartImpl();
 		}
 
 		private void Worker(object state)
