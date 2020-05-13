@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
 using SleepManager;
 
@@ -7,8 +8,14 @@ namespace ConsoleApplication1
 {
 	class Program
 	{
+		[DllImport("user32")]
+		static extern bool LockWorkStation();
+
 		static void Main(string[] args)
 		{
+			Console.WriteLine(new Lsa().AccessEnabled);
+			return;
+
 			Trace.Listeners.Add(new ConsoleTraceListener());
 
 			var lsa = new Lsa();

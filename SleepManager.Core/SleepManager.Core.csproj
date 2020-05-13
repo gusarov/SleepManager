@@ -43,11 +43,14 @@
     </Compile>
     <Compile Include="DateTimeProvider.cs" />
     <Compile Include="IDateTimeProvider.cs" />
+    <Compile Include="Logger.cs" />
+    <Compile Include="Native\AdvApi.cs" />
     <Compile Include="Native\IntPtrExtensions.cs" />
     <Compile Include="Lsa.cs" />
     <Compile Include="Native\LSAPolicy.cs" />
     <Compile Include="Native\LSAStringMarshaler.cs" />
     <Compile Include="Native\LSA_UNICODE_STRING.cs" />
+    <Compile Include="RunInSessions.cs" />
     <Compile Include="Scheduler.cs" />
     <Compile Include="Settings.cs" />
   </ItemGroup>

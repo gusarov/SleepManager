@@ -2,6 +2,8 @@
 using System.Linq;
 using System.Collections.Generic;
 using System;
+using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace SleepManager
 {
@@ -83,7 +85,7 @@ namespace SleepManager
 				Trace.TraceInformation("!IsAllowedTime");
 				var now = DateTimeProvider.UtcNow;
 
-				var timeInFight = now - _shutdownAttempted;
+				var timeInFight = now - _fightStarted;
 
 				if (UpTime.TotalMinutes <
 #if DEBUG
@@ -93,46 +95,56 @@ namespace SleepManager
 #endif
 					) // top priority - if you are booting again (from zero) in restricted time - shutdown immediately
 				{
-					Trace.TraceInformation("UpTime.TotalMinutes < 10 - ForceShutdown");
-					ForceShutdown();
+					// WHAT IF IT IS AUTOMATIC RESTART AFTER UPDATES IN THE 3:00???
+					Trace.TraceInformation("UpTime.TotalMinutes < 10");
+					// Just sit here and do nothing. User is unable to log on. Windows probably performing night time updates/restarts
+					// ForceShutdown();
 				}
-				else if (timeInFight >= TimeSpan.FromMinutes(3))
+				else if (false && timeInFight >= TimeSpan.FromMinutes(3))
 				{
 					Trace.TraceInformation(">= 3min - ForceShutdown");
 					ForceShutdown();
 				}
-				else if (timeInFight >= TimeSpan.FromMinutes(2))
+				else if (false && timeInFight >= TimeSpan.FromMinutes(2))
 				{
 					Trace.TraceInformation(">= 2min - ForceHibernate");
 					ForceHibernate();
 				}
 				else if (timeInFight >= TimeSpan.FromSeconds(45))
 				{
-					if (HibernateFirst)
+					if (true || HibernateFirst)
 					{
-						Trace.TraceInformation(">= 45sec - Hibernate instead");
-						ShutdownAbort();
-						Hibernate();
+						// Trace.TraceInformation(">= 45sec - Hibernate instead");
+						if (_shutdownScheduled)
+						{
+							ShutdownAbort();
+							_shutdownScheduled = false;
+						}
+
+						LockPc();
+						// Hibernate();
 					}
 				}
 				else
 				{
 					Trace.TraceInformation("GracefulShutdown");
-					if (!_shutdownAttempted.HasValue)
+					if (!_fightStarted.HasValue)
 					{
-						_shutdownAttempted = now;
+						_fightStarted = now;
 					}
 
 					GracefulShutdown(); // actually it will just show a warning for N minute. If hibernate enabled - it will abort, and hibernate instead
+					_shutdownScheduled = true;
 				}
 
 			}
 			else
 			{
-				if (_shutdownAttempted.HasValue)
+				if (_fightStarted.HasValue)
 				{
-					_shutdownAttempted = null; // process survives after hibernate and now in proper state
+					_fightStarted = null; // process survives after hibernate and now in proper state
 					ShutdownAbort(); // just in case if been scheduled
+					_shutdownScheduled = false;
 				}
 			}
 		}
@@ -260,6 +272,20 @@ namespace SleepManager
 			*/
 		}
 
+		public void LockPc()
+		{
+			LogonEnabled = true;
+			try
+			{
+				new RunInSessions().Run();
+				Thread.Sleep(1000);
+			}
+			finally
+			{
+				SetLogonAccess();
+			}
+		}
+
 		static int Run(string cmd, string args)
 		{
 			try
@@ -286,7 +312,8 @@ namespace SleepManager
 
 		private bool _tryAutoLodCtr;
 
-		private DateTime? _shutdownAttempted;
+		private DateTime? _fightStarted;
+		private bool _shutdownScheduled;
 
 		public TimeSpan UpTime
 		{
@@ -320,6 +347,5 @@ namespace SleepManager
 				}
 			}
 		}
-
 	}
 }
